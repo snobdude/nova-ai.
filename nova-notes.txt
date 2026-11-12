@@ -1,0 +1,13 @@
+# Nova AI
+
+Your personal AI assistant.
+
+## Features
+- AI chat powered by Groq
+- Conversation history
+- Flask backend
+- Mobile-friendly interface
+
+## Project folders
+- backend: Python Flask server
+- frontend: Nova chat interface
