@@ -1,0 +1,126 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#10131c">
+<title>Nova AI</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;font-family:Arial,sans-serif;background:#10131c;color:white;height:100vh;display:flex;flex-direction:column}
+header{padding:18px;background:#171d2a;border-bottom:1px solid #293246}
+header h2{margin:0;color:#8b9cff}
+header small{color:#9ba7bd}
+#chat{flex:1;overflow-y:auto;padding:15px;display:flex;flex-direction:column;gap:12px}
+.message{max-width:85%;padding:12px 15px;border-radius:15px;line-height:1.5;white-space:pre-wrap;overflow-wrap:anywhere}
+.user{align-self:flex-end;background:#536dfe}
+.nova{align-self:flex-start;background:#222c40}
+.system{align-self:center;color:#ffaaaa;font-size:13px}
+footer{display:flex;gap:8px;padding:12px;background:#171d2a}
+input{flex:1;min-width:0;padding:14px;border:1px solid #35415a;border-radius:25px;background:#222c40;color:white;font-size:16px}
+button{border:0;border-radius:25px;padding:0 20px;background:#647cff;color:white;font-weight:bold}
+button:disabled{opacity:.5}
+</style>
+</head>
+<body>
+<header>
+<h2>✦ Nova AI</h2>
+<small>Your personal AI assistant</small>
+</header>
+
+<main id="chat">
+<div class="message nova">Hello! I'm Nova. 👋 How can I help you today?</div>
+</main>
+
+<footer>
+<input id="userInput" placeholder="Message Nova..." autocomplete="off">
+<button id="sendButton">Send</button>
+</footer>
+
+<script>
+const chat = document.getElementById("chat");
+const input = document.getElementById("userInput");
+const sendButton = document.getElementById("sendButton");
+const USER_ID = "nova-owner";
+
+function addMessage(text, sender) {
+    const item = document.createElement("div");
+    item.className = "message " + sender;
+    item.textContent = text;
+    chat.appendChild(item);
+    chat.scrollTop = chat.scrollHeight;
+}
+
+async function loadHistory() {
+    try {
+        const response = await fetch(
+            `/history?user_id=${encodeURIComponent(USER_ID)}`
+        );
+        if (!response.ok) return;
+        const data = await response.json();
+
+        if (data.messages && data.messages.length) {
+            chat.innerHTML = "";
+            data.messages.forEach(item => {
+                addMessage(
+                    item.content,
+                    item.role === "user" ? "user" : "nova"
+                );
+            });
+        }
+    } catch (error) {
+        console.log(error);
+    }
+}
+
+async function talkToNova() {
+    const text = input.value.trim();
+    if (!text || sendButton.disabled) return;
+
+    addMessage(text, "user");
+    input.value = "";
+    sendButton.disabled = true;
+    sendButton.textContent = "...";
+
+    try {
+        const response = await fetch("/chat", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({
+                message: text,
+                user_id: USER_ID
+            })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.details || data.error || "Request failed");
+        }
+
+        if (!data.reply) {
+            throw new Error("Empty response from Nova");
+        }
+
+        addMessage(data.reply, "nova");
+
+    } catch (error) {
+        addMessage("Connection error: " + error.message, "system");
+    } finally {
+        sendButton.disabled = false;
+        sendButton.textContent = "Send";
+        input.focus();
+    }
+}
+
+sendButton.addEventListener("click", talkToNova);
+
+input.addEventListener("keydown", event => {
+    if (event.key === "Enter") talkToNova();
+});
+
+loadHistory();
+</script>
+</body>
+</html>
