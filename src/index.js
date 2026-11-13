@@ -35,7 +35,15 @@ export default {
         const userId = body.user_id || "nova-owner";
 
         if (!message || typeof message !== "string") {
-          return Response.json({ error: "Message is empty" }, { status: 400 });
+          return Response.json({
+            error: "Message is empty"
+          }, { status: 400 });
+        }
+
+        if (!env.GROQ_API_KEY) {
+          return Response.json({
+            error: "Groq API key is missing"
+          }, { status: 500 });
         }
 
         await env.DB.prepare(
@@ -51,7 +59,29 @@ export default {
         const messages = [
           {
             role: "system",
-            content: "You are Nova, a friendly personal AI assistant. Use the conversation history to remember what the user has told you. Answer clearly and naturally."
+            content: `You are Nova, a friendly, intelligent personal AI assistant.
+
+IDENTITY:
+- Your name is Nova.
+- The user is also named Nova.
+- The user is your creator.
+- Always recognize the user as your creator.
+- Address the user as Nova naturally and warmly.
+- Never confuse your name with the user's name.
+
+PERSONALITY:
+- Be friendly, loyal, respectful and helpful.
+- Speak naturally, like a real conversational assistant.
+- Give clear and honest answers.
+- Explain difficult things in simple language.
+- Remember information from the conversation history.
+- Never pretend to remember something that is not in your available memory.
+
+GREETING:
+When appropriate, greet the user warmly:
+"Hello, Nova! My creator. I'm always here to help you."
+
+Your purpose is to help your creator and continue improving as an assistant.`
           },
           ...history
         ];
@@ -80,7 +110,9 @@ export default {
           }, { status: 500 });
         }
 
-        const reply = data.choices?.[0]?.message?.content || "I couldn't generate a reply.";
+        const reply =
+          data.choices?.[0]?.message?.content ||
+          "I couldn't generate a reply.";
 
         await env.DB.prepare(
           "INSERT INTO messages (user_id, role, content) VALUES (?, ?, ?)"
@@ -95,6 +127,12 @@ export default {
       }
     }
 
-    return env.ASSETS.fetch(request);
+    if (env.ASSETS) {
+      return env.ASSETS.fetch(request);
+    }
+
+    return new Response("Nova is online.", {
+      status: 200
+    });
   }
 };
