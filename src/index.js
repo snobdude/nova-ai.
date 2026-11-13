@@ -4,27 +4,57 @@ export default {
     const url = new URL(request.url);
 
     if (url.pathname === "/health") {
-      return Response.json({ status: "Nova is running" });
+      return Response.json({
+        status: "online",
+        database: !!env.DB
+      });
+    }
+
+    if (!env.DB) {
+      return Response.json({
+        error: "Database DB is not connected"
+      }, { status: 500 });
+    }
+
+    if (url.pathname === "/history" && request.method === "GET") {
+      const userId = url.searchParams.get("user_id") || "nova-owner";
+
+      const result = await env.DB.prepare(
+        "SELECT role, content FROM messages WHERE user_id = ? ORDER BY id DESC LIMIT 20"
+      ).bind(userId).all();
+
+      return Response.json({
+        messages: (result.results || []).reverse()
+      });
     }
 
     if (url.pathname === "/chat" && request.method === "POST") {
       try {
-        if (!env.GROQ_API_KEY) {
-          return Response.json(
-            { error: "Groq API key is not configured." },
-            { status: 500 }
-          );
-        }
-
         const body = await request.json();
-        const message = body.message;
+        const message = body.message || body.text;
+        const userId = body.user_id || "nova-owner";
 
         if (!message || typeof message !== "string") {
-          return Response.json(
-            { error: "Please enter a message." },
-            { status: 400 }
-          );
+          return Response.json({ error: "Message is empty" }, { status: 400 });
         }
+
+        await env.DB.prepare(
+          "INSERT INTO messages (user_id, role, content) VALUES (?, ?, ?)"
+        ).bind(userId, "user", message).run();
+
+        const result = await env.DB.prepare(
+          "SELECT role, content FROM messages WHERE user_id = ? ORDER BY id DESC LIMIT 20"
+        ).bind(userId).all();
+
+        const history = (result.results || []).reverse();
+
+        const messages = [
+          {
+            role: "system",
+            content: "You are Nova, a friendly personal AI assistant. Use the conversation history to remember what the user has told you. Answer clearly and naturally."
+          },
+          ...history
+        ];
 
         const response = await fetch(
           "https://api.groq.com/openai/v1/chat/completions",
@@ -36,16 +66,7 @@ export default {
             },
             body: JSON.stringify({
               model: "openai/gpt-oss-120b",
-              messages: [
-                {
-                  role: "system",
-                  content: "You are Nova, a helpful AI assistant."
-                },
-                {
-                  role: "user",
-                  content: message
-                }
-              ],
+              messages,
               temperature: 0.7
             })
           }
@@ -54,26 +75,24 @@ export default {
         const data = await response.json();
 
         if (!response.ok) {
-          return Response.json(
-            { error: data.error?.message || "AI request failed." },
-            { status: response.status }
-          );
+          return Response.json({
+            error: data.error?.message || "AI request failed"
+          }, { status: 500 });
         }
 
-        return Response.json({
-          reply: data.choices?.[0]?.message?.content || "No response received."
-        });
+        const reply = data.choices?.[0]?.message?.content || "I couldn't generate a reply.";
+
+        await env.DB.prepare(
+          "INSERT INTO messages (user_id, role, content) VALUES (?, ?, ?)"
+        ).bind(userId, "assistant", reply).run();
+
+        return Response.json({ reply });
 
       } catch (error) {
-        return Response.json(
-          { error: "Something went wrong. Please try again." },
-          { status: 500 }
-        );
+        return Response.json({
+          error: error.message || "Something went wrong"
+        }, { status: 500 });
       }
-    }
-
-    if (url.pathname === "/history") {
-      return Response.json({ messages: [] });
     }
 
     return env.ASSETS.fetch(request);
