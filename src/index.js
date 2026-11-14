@@ -70,21 +70,26 @@ async function hashPassword(password, saltHex) {
 function constantTimeEqual(a, b) {
   if (a.length !== b.length) return false;
   let difference = 0;
+
   for (let i = 0; i < a.length; i++) {
     difference |= a.charCodeAt(i) ^ b.charCodeAt(i);
   }
+
   return difference === 0;
 }
 
 function getCookie(request, name) {
   const cookies = request.headers.get("Cookie") || "";
+
   for (const part of cookies.split(";")) {
     const index = part.indexOf("=");
     if (index < 0) continue;
+
     if (part.slice(0, index).trim() === name) {
       return part.slice(index + 1).trim();
     }
   }
+
   return null;
 }
 
@@ -110,6 +115,7 @@ async function createSession(env, userId) {
 
 async function getCurrentUser(request, env) {
   const token = getCookie(request, "nova_session");
+
   if (!token || !/^[a-f0-9]{64}$/i.test(token)) return null;
 
   const tokenHash = await sha256(token);
@@ -129,18 +135,24 @@ async function register(request, env) {
   const password = String(body.password || "");
 
   if (!/^[a-z0-9_]{3,24}$/.test(username)) {
-    return json({ error: "Username must be 3-24 characters using letters, numbers or underscores." }, 400);
+    return json({
+      error: "Username must be 3-24 characters using letters, numbers or underscores."
+    }, 400);
   }
 
   if (password.length < 10 || password.length > 128) {
-    return json({ error: "Password must be at least 10 characters and no more than 128." }, 400);
+    return json({
+      error: "Password must be at least 10 characters and no more than 128."
+    }, 400);
   }
 
   const existing = await env.DB.prepare(
     "SELECT id FROM users WHERE username = ?"
   ).bind(username).first();
 
-  if (existing) return json({ error: "Username is already taken." }, 409);
+  if (existing) {
+    return json({ error: "Username is already taken." }, 409);
+  }
 
   const salt = hex(crypto.getRandomValues(new Uint8Array(16)));
   const passwordHash = await hashPassword(password, salt);
@@ -151,10 +163,13 @@ async function register(request, env) {
       "INSERT INTO users (id, username, password_hash) VALUES (?, ?, ?)"
     ).bind(userId, username, `${salt}:${passwordHash}`).run();
   } catch (error) {
-    return json({ error: "Could not create account. Try another username." }, 409);
+    return json({
+      error: "Could not create account. Try another username."
+    }, 409);
   }
 
   const token = await createSession(env, userId);
+  await createConversation(env, userId);
 
   return json({
     success: true,
@@ -171,10 +186,15 @@ async function login(request, env) {
     "SELECT id, username, password_hash FROM users WHERE username = ?"
   ).bind(username).first();
 
-  if (!user) return json({ error: "Invalid username or password." }, 401);
+  if (!user) {
+    return json({ error: "Invalid username or password." }, 401);
+  }
 
   const [salt, savedHash] = user.password_hash.split(":");
-  if (!salt || !savedHash) return json({ error: "Account data is invalid." }, 500);
+
+  if (!salt || !savedHash) {
+    return json({ error: "Account data is invalid." }, 500);
+  }
 
   const enteredHash = await hashPassword(password, salt);
 
@@ -195,6 +215,7 @@ async function logout(request, env) {
 
   if (token && /^[a-f0-9]{64}$/i.test(token)) {
     const tokenHash = await sha256(token);
+
     await env.DB.prepare(
       "DELETE FROM sessions WHERE id = ?"
     ).bind(tokenHash).run();
@@ -231,6 +252,85 @@ async function groq(env, messages) {
   return data.choices?.[0]?.message?.content || "";
 }
 
+/* CONVERSATIONS */
+
+async function createConversation(env, userId) {
+  const id = crypto.randomUUID();
+
+  await env.DB.prepare(`
+    INSERT INTO conversations (id, user_id, title)
+    VALUES (?, ?, 'New Chat')
+  `).bind(id, userId).run();
+
+  return id;
+}
+
+async function getConversation(env, userId, conversationId) {
+  if (conversationId) {
+    return await env.DB.prepare(`
+      SELECT id, title
+      FROM conversations
+      WHERE id = ? AND user_id = ?
+    `).bind(conversationId, userId).first();
+  }
+
+  return await env.DB.prepare(`
+    SELECT id, title
+    FROM conversations
+    WHERE user_id = ?
+    ORDER BY updated_at DESC
+    LIMIT 1
+  `).bind(userId).first();
+}
+
+async function listConversations(env, userId) {
+  const result = await env.DB.prepare(`
+    SELECT id, title, created_at, updated_at
+    FROM conversations
+    WHERE user_id = ?
+    ORDER BY updated_at DESC
+  `).bind(userId).all();
+
+  return json({ conversations: result.results });
+}
+
+async function newChat(env, userId) {
+  const id = await createConversation(env, userId);
+
+  return json({
+    success: true,
+    conversation_id: id,
+    title: "New Chat"
+  });
+}
+
+async function loadHistory(env, userId, conversationId) {
+  const conversation = await getConversation(
+    env,
+    userId,
+    conversationId
+  );
+
+  if (!conversation) {
+    return json({ history: [], conversation_id: null });
+  }
+
+  const result = await env.DB.prepare(`
+    SELECT role, content
+    FROM messages
+    WHERE user_id = ? AND conversation_id = ?
+    ORDER BY id DESC
+    LIMIT 100
+  `).bind(userId, conversation.id).all();
+
+  return json({
+    history: result.results.reverse(),
+    conversation_id: conversation.id
+  });
+}
+
+/* LONG-TERM MEMORY */
+
 async function saveMemories(env, userId, userMessage, assistantReply) {
   const existing = await env.DB.prepare(
     "SELECT content FROM memories WHERE user_id = ? ORDER BY id DESC LIMIT 30"
@@ -263,6 +363,7 @@ Avoid duplicates.`
     .trim();
 
   const facts = JSON.parse(cleaned);
+
   if (!Array.isArray(facts)) return;
 
   for (const fact of facts.slice(0, 5)) {
@@ -282,11 +383,15 @@ Avoid duplicates.`
   }
 }
 
+/* CHAT */
+
 async function handleChat(request, env, user) {
   const body = await request.json();
   const message = String(body.message || "").trim();
 
-  if (!message) return json({ error: "Message is empty." }, 400);
+  if (!message) {
+    return json({ error: "Message is empty." }, 400);
+  }
 
   const lower = message.toLowerCase();
 
@@ -300,13 +405,17 @@ async function handleChat(request, env, user) {
 
   if (/^forget that$/i.test(message)) {
     await env.DB.prepare(`
-      DELETE FROM memories WHERE id = (
+      DELETE FROM memories
+      WHERE id = (
         SELECT id FROM memories
-        WHERE user_id = ? ORDER BY id DESC LIMIT 1
+        WHERE user_id = ?
+        ORDER BY id DESC LIMIT 1
       )
     `).bind(user.id).run();
 
-    return json({ reply: "I've removed your most recently stored memory." });
+    return json({
+      reply: "I've removed your most recently stored memory."
+    });
   }
 
   if (lower.startsWith("forget ")) {
@@ -323,17 +432,53 @@ async function handleChat(request, env, user) {
     }
   }
 
-  await env.DB.prepare(
-    "INSERT INTO messages (user_id, role, content) VALUES (?, 'user', ?)"
-  ).bind(user.id, message).run();
+  let conversation = await getConversation(
+    env,
+    user.id,
+    body.conversation_id
+  );
+
+  if (body.conversation_id && !conversation) {
+    return json({ error: "Conversation not found." }, 404);
+  }
+
+  if (!conversation) {
+    const id = await createConversation(env, user.id);
+    conversation = { id, title: "New Chat" };
+  }
+
+  await env.DB.prepare(`
+    INSERT INTO messages (user_id, role, content, conversation_id)
+    VALUES (?, 'user', ?, ?)
+  `).bind(user.id, message, conversation.id).run();
+
+  if (conversation.title === "New Chat") {
+    const title = message.slice(0, 45);
+
+    await env.DB.prepare(`
+      UPDATE conversations
+      SET title = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ? AND user_id = ?
+    `).bind(title, conversation.id, user.id).run();
+  } else {
+    await env.DB.prepare(`
+      UPDATE conversations
+      SET updated_at = CURRENT_TIMESTAMP
+      WHERE id = ? AND user_id = ?
+    `).bind(conversation.id, user.id).run();
+  }
 
   const memoryRows = await env.DB.prepare(
     "SELECT content FROM memories WHERE user_id = ? ORDER BY id DESC LIMIT 30"
   ).bind(user.id).all();
 
-  const historyRows = await env.DB.prepare(
-    "SELECT role, content FROM messages WHERE user_id = ? ORDER BY id DESC LIMIT 20"
-  ).bind(user.id).all();
+  const historyRows = await env.DB.prepare(`
+    SELECT role, content
+    FROM messages
+    WHERE user_id = ? AND conversation_id = ?
+    ORDER BY id DESC
+    LIMIT 20
+  `).bind(user.id, conversation.id).all();
 
   const memories = memoryRows.results.map(row => row.content);
   const history = historyRows.results.reverse();
@@ -352,9 +497,16 @@ async function handleChat(request, env, user) {
 
   const reply = await groq(env, messages);
 
-  await env.DB.prepare(
-    "INSERT INTO messages (user_id, role, content) VALUES (?, 'assistant', ?)"
-  ).bind(user.id, reply).run();
+  await env.DB.prepare(`
+    INSERT INTO messages (user_id, role, content, conversation_id)
+    VALUES (?, 'assistant', ?, ?)
+  `).bind(user.id, reply, conversation.id).run();
+
+  await env.DB.prepare(`
+    UPDATE conversations
+    SET updated_at = CURRENT_TIMESTAMP
+    WHERE id = ? AND user_id = ?
+  `).bind(conversation.id, user.id).run();
 
   try {
     await saveMemories(env, user.id, message, reply);
@@ -362,8 +514,13 @@ async function handleChat(request, env, user) {
     console.error("Memory update failed:", error);
   }
 
-  return json({ reply });
+  return json({
+    reply,
+    conversation_id: conversation.id
+  });
 }
+
+/* MAIN ROUTER */
 
 export default {
   async fetch(request, env) {
@@ -397,37 +554,50 @@ export default {
       if (request.method === "GET" && url.pathname === "/me") {
         const user = await getCurrentUser(request, env);
 
-        if (!user) return json({ authenticated: false }, 401);
+        if (!user) {
+          return json({ authenticated: false }, 401);
+        }
 
         return json({ authenticated: true, user });
       }
 
-      if (
-        (url.pathname === "/chat" || url.pathname === "/history") &&
-        !env.GROQ_API_KEY
-      ) {
-        return json({ error: "Groq is not connected." }, 500);
-      }
+      const protectedPaths = [
+        "/chat",
+        "/history",
+        "/new-chat",
+        "/conversations"
+      ];
 
-      if (
-        (url.pathname === "/chat" && request.method === "POST") ||
-        (url.pathname === "/history" && request.method === "GET")
-      ) {
+      if (protectedPaths.includes(url.pathname)) {
         const user = await getCurrentUser(request, env);
 
         if (!user) {
           return json({ error: "Please log in to use Nova." }, 401);
         }
 
-        if (url.pathname === "/chat") {
-          return await handleChat(request, env, user);
+        if (url.pathname === "/conversations" && request.method === "GET") {
+          return await listConversations(env, user.id);
         }
 
-        const result = await env.DB.prepare(
-          "SELECT role, content FROM messages WHERE user_id = ? ORDER BY id DESC LIMIT 20"
-        ).bind(user.id).all();
+        if (url.pathname === "/new-chat" && request.method === "POST") {
+          return await newChat(env, user.id);
+        }
 
-        return json({ history: result.results.reverse() });
+        if (url.pathname === "/history" && request.method === "GET") {
+          return await loadHistory(
+            env,
+            user.id,
+            url.searchParams.get("conversation_id")
+          );
+        }
+
+        if (url.pathname === "/chat" && request.method === "POST") {
+          if (!env.GROQ_API_KEY) {
+            return json({ error: "Groq is not connected." }, 500);
+          }
+
+          return await handleChat(request, env, user);
+        }
       }
 
       if (env.ASSETS) {
@@ -435,8 +605,10 @@ export default {
       }
 
       return new Response("Nova is online.");
+
     } catch (error) {
       console.error(error);
+
       return json({
         error: error.message || "Something went wrong."
       }, 500);
