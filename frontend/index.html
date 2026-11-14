@@ -9,22 +9,95 @@
 
 <style>
 *{box-sizing:border-box}
+
 body{
 margin:0;
 font-family:Arial,sans-serif;
 background:#10131c;
 color:white;
-height:100vh;
+min-height:100vh;
 display:flex;
 flex-direction:column
 }
+
 header{
 padding:18px;
 background:#171d2a;
-border-bottom:1px solid #293246
+border-bottom:1px solid #293246;
+display:flex;
+align-items:center;
+justify-content:space-between
 }
+
 header h2{margin:0;color:#8b9cff}
 header small{color:#9ba7bd}
+
+button{
+border:0;
+border-radius:10px;
+padding:12px 18px;
+background:#647cff;
+color:white;
+font-weight:bold;
+cursor:pointer
+}
+
+button:disabled{opacity:.5}
+
+input{
+width:100%;
+padding:14px;
+margin:8px 0;
+border:1px solid #35415a;
+border-radius:10px;
+background:#222c40;
+color:white;
+font-size:16px
+}
+
+#authScreen{
+width:90%;
+max-width:390px;
+margin:70px auto;
+padding:25px;
+background:#171d2a;
+border:1px solid #293246;
+border-radius:16px
+}
+
+#authScreen h2{
+color:#8b9cff;
+text-align:center
+}
+
+#authScreen p{
+color:#9ba7bd;
+text-align:center
+}
+
+#authButton{width:100%;margin-top:12px}
+
+#switchMode{
+background:none;
+color:#9ba7ff;
+padding:12px;
+width:100%
+}
+
+#error{
+color:#ff9999;
+font-size:14px;
+text-align:center;
+min-height:20px
+}
+
+#appScreen{
+display:none;
+flex:1;
+flex-direction:column;
+min-height:0
+}
+
 #chat{
 flex:1;
 overflow-y:auto;
@@ -33,6 +106,7 @@ display:flex;
 flex-direction:column;
 gap:12px
 }
+
 .message{
 max-width:85%;
 padding:12px 15px;
@@ -41,106 +115,311 @@ line-height:1.5;
 white-space:pre-wrap;
 overflow-wrap:anywhere
 }
-.user{align-self:flex-end;background:#536dfe}
-.nova{align-self:flex-start;background:#222c40}
-.system{align-self:center;color:#ffaaaa;font-size:13px}
+
+.user{
+align-self:flex-end;
+background:#536dfe
+}
+
+.nova{
+align-self:flex-start;
+background:#222c40
+}
+
+.system{
+align-self:center;
+color:#ffaaaa;
+font-size:13px
+}
+
 footer{
 display:flex;
 gap:8px;
 padding:12px;
 background:#171d2a
 }
-input{
-flex:1;
-min-width:0;
-padding:14px;
-border:1px solid #35415a;
-border-radius:25px;
-background:#222c40;
-color:white;
-font-size:16px
+
+footer input{flex:1;min-width:0;margin:0;border-radius:25px}
+footer button{border-radius:25px}
+
+#accountName{
+color:#9ba7bd;
+font-size:13px;
+margin-right:10px
 }
-button{
-border:0;
-border-radius:25px;
-padding:0 20px;
-background:#647cff;
-color:white;
-font-weight:bold
+
+#logoutButton{
+background:#343e55;
+padding:9px 13px
 }
-button:disabled{opacity:.5}
 </style>
 </head>
 
 <body>
 
 <header>
+<div>
 <h2>✦ Nova AI</h2>
 <small>Your personal AI assistant</small>
+</div>
+
+<div id="accountArea" style="display:none">
+<span id="accountName"></span>
+<button id="logoutButton">Logout</button>
+</div>
 </header>
 
-<main id="chat">
+<section id="authScreen">
+<h2 id="authTitle">Welcome Back</h2>
+<p id="authDescription">Login to continue with Nova.</p>
+
+<form id="authForm">
+<input
+id="username"
+type="text"
+placeholder="Username"
+autocomplete="username"
+required
+minlength="3"
+maxlength="24"
+>
+
+<input
+id="password"
+type="password"
+placeholder="Password"
+autocomplete="current-password"
+required
+minlength="10"
+maxlength="128"
+>
+
+<button id="authButton" type="submit">Login</button>
+</form>
+
+<p id="error"></p>
+
+<button id="switchMode" type="button">
+Create a new account
+</button>
+</section>
+
+<main id="appScreen">
+
+<div id="chat">
 <div class="message nova">
 Hello! I'm Nova. 👋 How can I help you today?
 </div>
-</main>
+</div>
 
 <footer>
-<input id="userInput" placeholder="Message Nova..." autocomplete="off">
+<input
+id="userInput"
+placeholder="Message Nova..."
+autocomplete="off"
+>
 <button id="sendButton">Send</button>
 </footer>
 
+</main>
+
 <script>
+const authScreen = document.getElementById("authScreen");
+const appScreen = document.getElementById("appScreen");
+const authForm = document.getElementById("authForm");
+const authTitle = document.getElementById("authTitle");
+const authDescription = document.getElementById("authDescription");
+const authButton = document.getElementById("authButton");
+const switchMode = document.getElementById("switchMode");
+const usernameInput = document.getElementById("username");
+const passwordInput = document.getElementById("password");
+const errorText = document.getElementById("error");
+
+const accountArea = document.getElementById("accountArea");
+const accountName = document.getElementById("accountName");
+const logoutButton = document.getElementById("logoutButton");
+
 const chat = document.getElementById("chat");
 const input = document.getElementById("userInput");
 const sendButton = document.getElementById("sendButton");
 
-// Give each browser a unique ID
-function getUserId() {
-    let id = localStorage.getItem("nova_user_id");
+let registerMode = false;
+let currentUser = null;
 
-    if (!id) {
-        id = crypto.randomUUID();
-        localStorage.setItem("nova_user_id", id);
-    }
-
-    return id;
+function showError(message) {
+    errorText.textContent = message;
 }
 
-const USER_ID = getUserId();
+function setAuthMode(register) {
+    registerMode = register;
+
+    authTitle.textContent = register
+        ? "Create Account"
+        : "Welcome Back";
+
+    authDescription.textContent = register
+        ? "Create your personal Nova account."
+        : "Login to continue with Nova.";
+
+    authButton.textContent = register
+        ? "Create Account"
+        : "Login";
+
+    switchMode.textContent = register
+        ? "Already have an account? Login"
+        : "Create a new account";
+
+    passwordInput.autocomplete = register
+        ? "new-password"
+        : "current-password";
+
+    showError("");
+}
+
+switchMode.addEventListener("click", () => {
+    setAuthMode(!registerMode);
+});
+
+async function api(path, options = {}) {
+    const response = await fetch(path, {
+        ...options,
+        credentials: "same-origin",
+        headers: {
+            "Content-Type": "application/json",
+            ...(options.headers || {})
+        }
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+        throw new Error(data.error || "Request failed");
+    }
+
+    return data;
+}
 
 function addMessage(text, sender) {
     const item = document.createElement("div");
     item.className = "message " + sender;
     item.textContent = text;
+
     chat.appendChild(item);
     chat.scrollTop = chat.scrollHeight;
 }
 
 async function loadHistory() {
     try {
-        const response = await fetch(
-            `/history?user_id=${encodeURIComponent(USER_ID)}`
-        );
+        const data = await api("/history");
 
-        if (!response.ok) return;
-
-        const data = await response.json();
+        chat.innerHTML = "";
 
         if (data.history && data.history.length) {
-            chat.innerHTML = "";
-
             data.history.forEach(item => {
                 addMessage(
                     item.content,
                     item.role === "user" ? "user" : "nova"
                 );
             });
+        } else {
+            addMessage(
+                "Hello! I'm Nova. 👋 How can I help you today?",
+                "nova"
+            );
         }
     } catch (error) {
-        console.log("History error:", error);
+        addMessage(
+            "Could not load conversation history: " + error.message,
+            "system"
+        );
     }
 }
+
+function showApp(user) {
+    currentUser = user;
+
+    authScreen.style.display = "none";
+    appScreen.style.display = "flex";
+    accountArea.style.display = "block";
+
+    accountName.textContent = user.username;
+
+    loadHistory();
+}
+
+async function checkLogin() {
+    try {
+        const data = await api("/me");
+
+        if (data.authenticated && data.user) {
+            showApp(data.user);
+        }
+    } catch (error) {
+        authScreen.style.display = "block";
+        appScreen.style.display = "none";
+    }
+}
+
+authForm.addEventListener("submit", async event => {
+    event.preventDefault();
+
+    const username = usernameInput.value.trim();
+    const password = passwordInput.value;
+
+    authButton.disabled = true;
+    authButton.textContent = "Please wait...";
+    showError("");
+
+    try {
+        const endpoint = registerMode
+            ? "/register"
+            : "/login";
+
+        const data = await api(endpoint, {
+            method: "POST",
+            body: JSON.stringify({
+                username,
+                password
+            })
+        });
+
+        passwordInput.value = "";
+
+        showApp(data.user);
+
+    } catch (error) {
+        showError(error.message);
+    } finally {
+        authButton.disabled = false;
+        authButton.textContent = registerMode
+            ? "Create Account"
+            : "Login";
+    }
+});
+
+logoutButton.addEventListener("click", async () => {
+    logoutButton.disabled = true;
+
+    try {
+        await api("/logout", {
+            method: "POST",
+            body: JSON.stringify({})
+        });
+    } catch (error) {
+        console.log(error);
+    }
+
+    currentUser = null;
+    appScreen.style.display = "none";
+    authScreen.style.display = "block";
+    accountArea.style.display = "none";
+
+    usernameInput.value = "";
+    passwordInput.value = "";
+
+    setAuthMode(false);
+    logoutButton.disabled = false;
+});
 
 async function talkToNova() {
     const text = input.value.trim();
@@ -149,24 +428,17 @@ async function talkToNova() {
 
     addMessage(text, "user");
     input.value = "";
+
     sendButton.disabled = true;
     sendButton.textContent = "...";
 
     try {
-        const response = await fetch("/chat", {
+        const data = await api("/chat", {
             method: "POST",
-            headers: {"Content-Type": "application/json"},
             body: JSON.stringify({
-                message: text,
-                user_id: USER_ID
+                message: text
             })
         });
-
-        const data = await response.json();
-
-        if (!response.ok) {
-            throw new Error(data.error || "Request failed");
-        }
 
         if (!data.reply) {
             throw new Error("Empty response from Nova");
@@ -175,7 +447,10 @@ async function talkToNova() {
         addMessage(data.reply, "nova");
 
     } catch (error) {
-        addMessage("Connection error: " + error.message, "system");
+        addMessage(
+            "Connection error: " + error.message,
+            "system"
+        );
     } finally {
         sendButton.disabled = false;
         sendButton.textContent = "Send";
@@ -186,10 +461,12 @@ async function talkToNova() {
 sendButton.addEventListener("click", talkToNova);
 
 input.addEventListener("keydown", event => {
-    if (event.key === "Enter") talkToNova();
+    if (event.key === "Enter") {
+        talkToNova();
+    }
 });
 
-loadHistory();
+checkLogin();
 </script>
 
 </body>
