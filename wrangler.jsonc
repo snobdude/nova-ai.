@@ -15,5 +15,12 @@
       "/history",
       "/health"
     ]
-  }
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "nova-memory",
+      "database_id": "aba5daaa-8b72-48b7-8b52-72d9ad3c9cd4"
+    }
+  ]
 }
