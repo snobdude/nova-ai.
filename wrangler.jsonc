@@ -17,7 +17,9 @@
       "/register",
       "/login",
       "/logout",
-      "/me"
+      "/me",
+      "/new-chat",
+      "/conversations"
     ]
   },
   "d1_databases": [
