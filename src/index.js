@@ -1,13 +1,12 @@
 
 const MODEL = "openai/gpt-oss-120b";
 const SESSION_DAYS = 30;
-const PBKDF2_ITERATIONS = 310000;
+const PBKDF2_ITERATIONS = 100000;
 
 const SYSTEM_PROMPT = `
 You are Nova, a helpful personal AI assistant.
 Your creator is Nova. If asked who built you, say:
 "I was built by Nova, my creator."
-
 Address your creator as Nova naturally.
 Answer the latest message directly.
 Use stored memories when relevant.
@@ -35,13 +34,14 @@ function hex(bytes) {
 }
 
 function randomToken() {
-  const bytes = crypto.getRandomValues(new Uint8Array(32));
-  return hex(bytes);
+  return hex(crypto.getRandomValues(new Uint8Array(32)));
 }
 
 async function sha256(value) {
-  const data = new TextEncoder().encode(value);
-  return hex(await crypto.subtle.digest("SHA-256", data));
+  return hex(await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(value)
+  ));
 }
 
 async function hashPassword(password, saltHex) {
@@ -57,45 +57,34 @@ async function hashPassword(password, saltHex) {
     ["deriveBits"]
   );
 
-  const result = await crypto.subtle.deriveBits(
-    {
-      name: "PBKDF2",
-      salt,
-      iterations: PBKDF2_ITERATIONS,
-      hash: "SHA-256"
-    },
-    key,
-    256
-  );
+  const result = await crypto.subtle.deriveBits({
+    name: "PBKDF2",
+    salt,
+    iterations: PBKDF2_ITERATIONS,
+    hash: "SHA-256"
+  }, key, 256);
 
   return hex(result);
 }
 
 function constantTimeEqual(a, b) {
   if (a.length !== b.length) return false;
-
   let difference = 0;
-
   for (let i = 0; i < a.length; i++) {
     difference |= a.charCodeAt(i) ^ b.charCodeAt(i);
   }
-
   return difference === 0;
 }
 
 function getCookie(request, name) {
   const cookies = request.headers.get("Cookie") || "";
-
   for (const part of cookies.split(";")) {
     const index = part.indexOf("=");
-
     if (index < 0) continue;
-
     if (part.slice(0, index).trim() === name) {
       return part.slice(index + 1).trim();
     }
   }
-
   return null;
 }
 
@@ -110,8 +99,7 @@ function clearSessionCookie() {
 async function createSession(env, userId) {
   const token = randomToken();
   const tokenHash = await sha256(token);
-  const expires = Math.floor(Date.now() / 1000) +
-    SESSION_DAYS * 86400;
+  const expires = Math.floor(Date.now() / 1000) + SESSION_DAYS * 86400;
 
   await env.DB.prepare(
     "INSERT INTO sessions (id, user_id, expires_at) VALUES (?, ?, ?)"
@@ -122,52 +110,37 @@ async function createSession(env, userId) {
 
 async function getCurrentUser(request, env) {
   const token = getCookie(request, "nova_session");
-
-  if (!token || !/^[a-f0-9]{64}$/i.test(token)) {
-    return null;
-  }
+  if (!token || !/^[a-f0-9]{64}$/i.test(token)) return null;
 
   const tokenHash = await sha256(token);
   const now = Math.floor(Date.now() / 1000);
 
-  const session = await env.DB.prepare(`
+  return await env.DB.prepare(`
     SELECT users.id, users.username
     FROM sessions
     JOIN users ON users.id = sessions.user_id
     WHERE sessions.id = ? AND sessions.expires_at > ?
   `).bind(tokenHash, now).first();
-
-  return session || null;
 }
 
 async function register(request, env) {
   const body = await request.json();
-
-  const username = String(body.username || "")
-    .trim()
-    .toLowerCase();
-
+  const username = String(body.username || "").trim().toLowerCase();
   const password = String(body.password || "");
 
   if (!/^[a-z0-9_]{3,24}$/.test(username)) {
-    return json({
-      error: "Username must be 3-24 characters using letters, numbers or underscores."
-    }, 400);
+    return json({ error: "Username must be 3-24 characters using letters, numbers or underscores." }, 400);
   }
 
   if (password.length < 10 || password.length > 128) {
-    return json({
-      error: "Password must be at least 10 characters and no more than 128."
-    }, 400);
+    return json({ error: "Password must be at least 10 characters and no more than 128." }, 400);
   }
 
   const existing = await env.DB.prepare(
     "SELECT id FROM users WHERE username = ?"
   ).bind(username).first();
 
-  if (existing) {
-    return json({ error: "Username is already taken." }, 409);
-  }
+  if (existing) return json({ error: "Username is already taken." }, 409);
 
   const salt = hex(crypto.getRandomValues(new Uint8Array(16)));
   const passwordHash = await hashPassword(password, salt);
@@ -186,33 +159,22 @@ async function register(request, env) {
   return json({
     success: true,
     user: { id: userId, username }
-  }, 201, {
-    "Set-Cookie": sessionCookie(token)
-  });
+  }, 201, { "Set-Cookie": sessionCookie(token) });
 }
 
 async function login(request, env) {
   const body = await request.json();
-
-  const username = String(body.username || "")
-    .trim()
-    .toLowerCase();
-
+  const username = String(body.username || "").trim().toLowerCase();
   const password = String(body.password || "");
 
   const user = await env.DB.prepare(
     "SELECT id, username, password_hash FROM users WHERE username = ?"
   ).bind(username).first();
 
-  if (!user) {
-    return json({ error: "Invalid username or password." }, 401);
-  }
+  if (!user) return json({ error: "Invalid username or password." }, 401);
 
   const [salt, savedHash] = user.password_hash.split(":");
-
-  if (!salt || !savedHash) {
-    return json({ error: "Account data is invalid." }, 500);
-  }
+  if (!salt || !savedHash) return json({ error: "Account data is invalid." }, 500);
 
   const enteredHash = await hashPassword(password, salt);
 
@@ -224,13 +186,8 @@ async function login(request, env) {
 
   return json({
     success: true,
-    user: {
-      id: user.id,
-      username: user.username
-    }
-  }, 200, {
-    "Set-Cookie": sessionCookie(token)
-  });
+    user: { id: user.id, username: user.username }
+  }, 200, { "Set-Cookie": sessionCookie(token) });
 }
 
 async function logout(request, env) {
@@ -238,7 +195,6 @@ async function logout(request, env) {
 
   if (token && /^[a-f0-9]{64}$/i.test(token)) {
     const tokenHash = await sha256(token);
-
     await env.DB.prepare(
       "DELETE FROM sessions WHERE id = ?"
     ).bind(tokenHash).run();
@@ -307,7 +263,6 @@ Avoid duplicates.`
     .trim();
 
   const facts = JSON.parse(cleaned);
-
   if (!Array.isArray(facts)) return;
 
   for (const fact of facts.slice(0, 5)) {
@@ -331,9 +286,7 @@ async function handleChat(request, env, user) {
   const body = await request.json();
   const message = String(body.message || "").trim();
 
-  if (!message) {
-    return json({ error: "Message is empty." }, 400);
-  }
+  if (!message) return json({ error: "Message is empty." }, 400);
 
   const lower = message.toLowerCase();
 
@@ -347,11 +300,9 @@ async function handleChat(request, env, user) {
 
   if (/^forget that$/i.test(message)) {
     await env.DB.prepare(`
-      DELETE FROM memories
-      WHERE id = (
+      DELETE FROM memories WHERE id = (
         SELECT id FROM memories
-        WHERE user_id = ?
-        ORDER BY id DESC LIMIT 1
+        WHERE user_id = ? ORDER BY id DESC LIMIT 1
       )
     `).bind(user.id).run();
 
@@ -446,14 +397,9 @@ export default {
       if (request.method === "GET" && url.pathname === "/me") {
         const user = await getCurrentUser(request, env);
 
-        if (!user) {
-          return json({ authenticated: false }, 401);
-        }
+        if (!user) return json({ authenticated: false }, 401);
 
-        return json({
-          authenticated: true,
-          user
-        });
+        return json({ authenticated: true, user });
       }
 
       if (
@@ -470,9 +416,7 @@ export default {
         const user = await getCurrentUser(request, env);
 
         if (!user) {
-          return json({
-            error: "Please log in to use Nova."
-          }, 401);
+          return json({ error: "Please log in to use Nova." }, 401);
         }
 
         if (url.pathname === "/chat") {
@@ -483,9 +427,7 @@ export default {
           "SELECT role, content FROM messages WHERE user_id = ? ORDER BY id DESC LIMIT 20"
         ).bind(user.id).all();
 
-        return json({
-          history: result.results.reverse()
-        });
+        return json({ history: result.results.reverse() });
       }
 
       if (env.ASSETS) {
@@ -495,7 +437,6 @@ export default {
       return new Response("Nova is online.");
     } catch (error) {
       console.error(error);
-
       return json({
         error: error.message || "Something went wrong."
       }, 500);
