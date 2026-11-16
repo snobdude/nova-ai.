@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -16,20 +17,10 @@ body{
   color:#fff;
 }
 
-button,input{
-  font:inherit;
-}
+button,input{font:inherit}
+button{border:0;cursor:pointer}
+.hidden{display:none!important}
 
-button{
-  border:0;
-  cursor:pointer;
-}
-
-.hidden{
-  display:none!important;
-}
-
-/* HEADER */
 header{
   height:60px;
   display:flex;
@@ -46,12 +37,8 @@ header{
   margin-right:12px;
 }
 
-.logo{
-  font-size:20px;
-  font-weight:bold;
-}
+.logo{font-size:20px;font-weight:bold}
 
-/* SIDEBAR */
 #sidebar{
   position:fixed;
   top:0;
@@ -66,9 +53,7 @@ header{
   overflow-y:auto;
 }
 
-#sidebar.open{
-  left:0;
-}
+#sidebar.open{left:0}
 
 #sidebarTop{
   display:flex;
@@ -103,9 +88,7 @@ header{
   text-overflow:ellipsis;
 }
 
-.conversation.active{
-  background:#35415a;
-}
+.conversation.active{background:#35415a}
 
 #logoutButton{
   width:100%;
@@ -116,7 +99,6 @@ header{
   color:white;
 }
 
-/* MAIN */
 main{
   height:calc(100vh - 60px);
   display:flex;
@@ -136,24 +118,16 @@ main{
   color:#b9c0ce;
 }
 
-#welcome h1{
-  color:#fff;
-}
+#welcome h1{color:#fff}
 
-/* MESSAGES */
 .message{
   max-width:850px;
   margin:0 auto 15px;
   display:flex;
 }
 
-.message.user{
-  justify-content:flex-end;
-}
-
-.message.assistant{
-  justify-content:flex-start;
-}
+.message.user{justify-content:flex-end}
+.message.assistant{justify-content:flex-start}
 
 .bubble{
   max-width:85%;
@@ -164,15 +138,9 @@ main{
   word-wrap:break-word;
 }
 
-.user .bubble{
-  background:#34425d;
-}
+.user .bubble{background:#34425d}
+.assistant .bubble{background:#202633}
 
-.assistant .bubble{
-  background:#202633;
-}
-
-/* COMPOSER */
 #composer{
   position:fixed;
   bottom:0;
@@ -201,12 +169,9 @@ main{
   outline:none;
 }
 
-#messageInput:focus{
-  border-color:#596a8d;
-}
+#messageInput:focus{border-color:#596a8d}
 
-#voiceButton,
-#sendButton{
+#voiceButton,#sendButton{
   padding:0 15px;
   border-radius:9px;
   color:white;
@@ -217,22 +182,10 @@ main{
   font-size:19px;
 }
 
-#voiceButton.listening{
-  background:#c83d3d;
-}
-
-#voiceButton:disabled{
-  opacity:.5;
-  cursor:not-allowed;
-}
-
-#sendButton{
-  background:#536b9b;
-}
-
-#sendButton:disabled{
-  opacity:.5;
-}
+#voiceButton.listening{background:#c83d3d}
+#voiceButton:disabled{opacity:.5;cursor:not-allowed}
+#sendButton{background:#536b9b}
+#sendButton:disabled{opacity:.5}
 
 #status{
   max-width:900px;
@@ -241,21 +194,10 @@ main{
   color:#8f98aa;
 }
 
-/* MOBILE */
 @media(max-width:600px){
-  .bubble{
-    max-width:90%;
-  }
-
-  #messages{
-    padding-left:10px;
-    padding-right:10px;
-  }
-
-  #voiceButton,
-  #sendButton{
-    padding:0 12px;
-  }
+  .bubble{max-width:90%}
+  #messages{padding-left:10px;padding-right:10px}
+  #voiceButton,#sendButton{padding:0 12px}
 }
 </style>
 </head>
@@ -274,39 +216,29 @@ main{
   </div>
 
   <button id="newChat">＋ New Chat</button>
-
   <div id="conversationList"></div>
-
   <button id="logoutButton">Logout</button>
 </aside>
 
 <main>
   <div id="messages">
-
     <div id="welcome">
       <h1>Nova</h1>
       <p>Your personal AI assistant.</p>
     </div>
-
   </div>
 
   <div id="composer">
     <div class="composer-inner">
-
-      <input
-        id="messageInput"
+      <input id="messageInput"
         placeholder="Message Nova..."
-        autocomplete="off"
-      >
+        autocomplete="off">
 
-      <button id="voiceButton" type="button" title="Speak">
-        🎙️
-      </button>
+      <button id="voiceButton"
+        type="button"
+        title="Speak">🎙️</button>
 
-      <button id="sendButton">
-        Send
-      </button>
-
+      <button id="sendButton">Send</button>
     </div>
 
     <div id="status">Nova is ready</div>
@@ -319,9 +251,7 @@ const $ = id => document.getElementById(id);
 let currentConversationId = null;
 let busy = false;
 
-/* =========================
-   API
-========================= */
+/* API */
 
 async function request(url, options = {}) {
   const response = await fetch(url, {
@@ -337,18 +267,14 @@ async function request(url, options = {}) {
 
   if (!response.ok) {
     throw new Error(
-      data.error ||
-      data.message ||
-      "Request failed"
+      data.error || data.message || "Request failed"
     );
   }
 
   return data;
 }
 
-/* =========================
-   AUTH
-========================= */
+/* AUTH */
 
 async function checkLogin() {
   try {
@@ -359,21 +285,16 @@ async function checkLogin() {
   }
 }
 
-/* =========================
-   CONVERSATIONS
-========================= */
+/* CONVERSATIONS */
 
 async function loadConversations() {
   try {
     const data = await request("/conversations");
-
     const list = $("conversationList");
+
     list.innerHTML = "";
 
-    const conversations = data.conversations || [];
-
-    conversations.forEach(conversation => {
-
+    (data.conversations || []).forEach(conversation => {
       const item = document.createElement("div");
 
       item.className = "conversation";
@@ -382,28 +303,20 @@ async function loadConversations() {
         item.classList.add("active");
       }
 
-      item.textContent =
-        conversation.title || "New Chat";
+      item.textContent = conversation.title || "New Chat";
 
-      item.onclick = () => {
-        openConversation(conversation.id);
-      };
+      item.onclick = () => openConversation(conversation.id);
 
       list.appendChild(item);
     });
-
   } catch(error) {
     $("status").textContent = error.message;
   }
 }
 
-async function loadConversationListOnly() {
-  await loadConversations();
-}
-
 async function createNewChat() {
-
   try {
+    stopNovaSpeech();
 
     const data = await request("/new-chat", {
       method: "POST"
@@ -418,402 +331,276 @@ async function createNewChat() {
       </div>
     `;
 
-    await loadConversationListOnly();
-
+    await loadConversations();
     closeSidebar();
 
     $("status").textContent = "New chat ready";
-
   } catch(error) {
-
     $("status").textContent = error.message;
-
   }
 }
 
 async function openConversation(id) {
-
   try {
+    stopNovaSpeech();
 
     currentConversationId = id;
-
     $("messages").innerHTML = "";
-
-    $("status").textContent =
-      "Loading conversation...";
+    $("status").textContent = "Loading conversation...";
 
     const data = await request(
-      "/history?conversation_id=" +
-      encodeURIComponent(id)
+      "/history?conversation_id=" + encodeURIComponent(id)
     );
 
     const messages = data.messages || [];
 
     if (messages.length === 0) {
-
       $("messages").innerHTML = `
         <div id="welcome">
           <h1>Nova</h1>
           <p>No messages in this conversation yet.</p>
         </div>
       `;
-
     } else {
-
       messages.forEach(message => {
-        addMessage(
-          message.role,
-          message.content
-        );
+        addMessage(message.role, message.content);
       });
-
     }
 
-    $("status").textContent =
-      "Nova is ready";
+    $("status").textContent = "Nova is ready";
 
-    await loadConversationListOnly();
-
+    await loadConversations();
     closeSidebar();
-
     scrollToBottom();
-
   } catch(error) {
-
-    $("status").textContent =
-      error.message;
-
+    $("status").textContent = error.message;
   }
 }
 
-/* =========================
-   MESSAGES
-========================= */
+/* MESSAGES */
 
 function addMessage(role, content) {
-
   const messages = $("messages");
 
   const row = document.createElement("div");
 
   row.className =
-    "message " +
-    (role === "user"
-      ? "user"
-      : "assistant");
+    "message " + (role === "user" ? "user" : "assistant");
 
-  const bubble =
-    document.createElement("div");
+  const bubble = document.createElement("div");
 
   bubble.className = "bubble";
-
   bubble.textContent = content;
 
   row.appendChild(bubble);
-
   messages.appendChild(row);
 }
 
 function scrollToBottom() {
-
   const messages = $("messages");
-
-  messages.scrollTop =
-    messages.scrollHeight;
+  messages.scrollTop = messages.scrollHeight;
 }
 
-/* =========================
-   SEND MESSAGE
-========================= */
+/* VOICE OUTPUT */
+
+function stopNovaSpeech() {
+  if ("speechSynthesis" in window) {
+    window.speechSynthesis.cancel();
+  }
+}
+
+function speakNova(text) {
+  if (!("speechSynthesis" in window)) {
+    $("status").textContent =
+      "Voice output is not supported on this device";
+    return;
+  }
+
+  const cleanText = String(text || "").trim();
+
+  if (!cleanText) return;
+
+  stopNovaSpeech();
+
+  const utterance = new SpeechSynthesisUtterance(cleanText);
+
+  utterance.lang = "en-US";
+  utterance.rate = 1;
+  utterance.pitch = 1;
+  utterance.volume = 1;
+
+  utterance.onstart = () => {
+    $("status").textContent = "Nova is speaking...";
+  };
+
+  utterance.onend = () => {
+    if (!busy) {
+      $("status").textContent = "Nova is ready";
+    }
+  };
+
+  utterance.onerror = () => {
+    if (!busy) {
+      $("status").textContent = "Voice playback failed";
+    }
+  };
+
+  window.speechSynthesis.speak(utterance);
+}
+
+/* SEND MESSAGE */
 
 async function sendMessage() {
-
   if (busy) return;
 
   const input = $("messageInput");
-
-  const message =
-    input.value.trim();
+  const message = input.value.trim();
 
   if (!message) return;
 
   busy = true;
-
   input.value = "";
 
   addMessage("user", message);
-
   scrollToBottom();
 
   $("sendButton").disabled = true;
-
-  $("status").textContent =
-    "Nova is thinking...";
+  $("status").textContent = "Nova is thinking...";
 
   try {
-
     const data = await request("/chat", {
-
       method: "POST",
-
       body: JSON.stringify({
-
         message,
-
-        conversation_id:
-          currentConversationId
-
+        conversation_id: currentConversationId
       })
-
     });
 
     if (data.conversation_id) {
-
-      currentConversationId =
-        data.conversation_id;
-
+      currentConversationId = data.conversation_id;
     }
 
-    addMessage(
-      "assistant",
-      data.reply || ""
-    );
+    const reply = data.reply || "";
 
-    await loadConversationListOnly();
+    addMessage("assistant", reply);
 
+    await loadConversations();
     scrollToBottom();
 
-    $("status").textContent =
-      "Nova is ready";
+    // Automatically speak Nova's reply
+    if (reply.trim()) {
+      speakNova(reply);
+    } else {
+      $("status").textContent = "Nova is ready";
+    }
 
   } catch(error) {
-
-    addMessage(
-      "assistant",
-      "Error: " + error.message
-    );
-
-    $("status").textContent =
-      "Error";
-
+    addMessage("assistant", "Error: " + error.message);
+    $("status").textContent = "Error";
   } finally {
-
     busy = false;
-
-    $("sendButton").disabled =
-      false;
-
+    $("sendButton").disabled = false;
     input.focus();
-
   }
 }
 
-/* =========================
-   VOICE INPUT
-========================= */
+/* VOICE INPUT */
 
 const SpeechRecognition =
   window.SpeechRecognition ||
   window.webkitSpeechRecognition;
 
-const voiceButton =
-  $("voiceButton");
+const voiceButton = $("voiceButton");
 
 if (SpeechRecognition) {
-
-  const recognition =
-    new SpeechRecognition();
+  const recognition = new SpeechRecognition();
 
   recognition.lang = "en-US";
-
-  recognition.interimResults =
-    false;
-
-  recognition.continuous =
-    false;
+  recognition.interimResults = false;
+  recognition.continuous = false;
 
   let listening = false;
 
   recognition.onstart = () => {
-
     listening = true;
-
-    voiceButton.classList.add(
-      "listening"
-    );
-
-    voiceButton.textContent =
-      "🔴";
-
-    $("status").textContent =
-      "Listening...";
-
+    voiceButton.classList.add("listening");
+    voiceButton.textContent = "🔴";
+    $("status").textContent = "Listening...";
   };
 
   recognition.onresult = event => {
-
-    const transcript =
-      event.results[0][0].transcript;
-
-    $("messageInput").value =
-      transcript;
-
-    $("status").textContent =
-      "Voice captured";
-
+    const transcript = event.results[0][0].transcript;
+    $("messageInput").value = transcript;
+    $("status").textContent = "Voice captured";
   };
 
   recognition.onerror = event => {
-
-    $("status").textContent =
-      "Voice error: " +
-      event.error;
-
+    $("status").textContent = "Voice error: " + event.error;
   };
 
   recognition.onend = () => {
-
     listening = false;
-
-    voiceButton.classList.remove(
-      "listening"
-    );
-
-    voiceButton.textContent =
-      "🎙️";
+    voiceButton.classList.remove("listening");
+    voiceButton.textContent = "🎙️";
 
     if (!busy) {
-
-      $("status").textContent =
-        "Nova is ready";
-
+      $("status").textContent = "Nova is ready";
     }
-
   };
 
   voiceButton.onclick = () => {
-
     if (listening) return;
 
     try {
-
       recognition.start();
-
     } catch(error) {
-
       console.log(error);
-
     }
-
   };
-
 } else {
-
   voiceButton.disabled = true;
-
   voiceButton.title =
     "Voice input is not supported in this browser";
-
 }
 
-/* =========================
-   VOICE OUTPUT
-========================= */
+/* BUTTONS */
 
-function speakNova(text) {
+$("sendButton").onclick = sendMessage;
 
-  if (!("speechSynthesis" in window)) {
-    return;
+$("messageInput").addEventListener("keydown", event => {
+  if (event.key === "Enter" && !event.shiftKey) {
+    event.preventDefault();
+    sendMessage();
   }
-
-  speechSynthesis.cancel();
-
-  const utterance =
-    new SpeechSynthesisUtterance(text);
-
-  utterance.lang = "en-US";
-
-  utterance.rate = 1;
-
-  speechSynthesis.speak(
-    utterance
-  );
-}
-
-/* =========================
-   BUTTONS
-========================= */
-
-$("sendButton").onclick =
-  sendMessage;
-
-$("messageInput").addEventListener(
-  "keydown",
-  event => {
-
-    if (
-      event.key === "Enter" &&
-      !event.shiftKey
-    ) {
-
-      event.preventDefault();
-
-      sendMessage();
-
-    }
-
-  }
-);
+});
 
 $("menuButton").onclick = () => {
-
-  $("sidebar").classList.add(
-    "open"
-  );
-
+  $("sidebar").classList.add("open");
 };
 
-$("closeSidebar").onclick = () => {
-
-  closeSidebar();
-
-};
+$("closeSidebar").onclick = closeSidebar;
 
 function closeSidebar() {
-
-  $("sidebar").classList.remove(
-    "open"
-  );
-
+  $("sidebar").classList.remove("open");
 }
 
-$("newChat").onclick =
-  createNewChat;
+$("newChat").onclick = createNewChat;
 
-$("logoutButton").onclick =
-  async () => {
+$("logoutButton").onclick = async () => {
+  try {
+    stopNovaSpeech();
 
-    try {
+    await request("/logout", {
+      method: "POST"
+    });
 
-      await request(
-        "/logout",
-        { method: "POST" }
-      );
+    location.href = "/";
+  } catch(error) {
+    $("status").textContent = error.message;
+  }
+};
 
-      location.href = "/";
-
-    } catch(error) {
-
-      $("status").textContent =
-        error.message;
-
-    }
-
-  };
-
-/* =========================
-   START
-========================= */
+/* START */
 
 checkLogin();
 </script>
