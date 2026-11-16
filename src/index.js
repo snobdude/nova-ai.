@@ -72,6 +72,7 @@ async function hashPassword(password, saltHex) {
 
 function constantTimeEqual(a, b) {
   if (a.length !== b.length) return false;
+
   let difference = 0;
 
   for (let i = 0; i < a.length; i++) {
@@ -243,7 +244,8 @@ async function groq(env, messages) {
       body: JSON.stringify({
         model: MODEL,
         messages,
-        temperature: 0.7
+        temperature: 0.7,
+        tool_choice: "none"
       })
     }
   );
@@ -254,7 +256,13 @@ async function groq(env, messages) {
     throw new Error(data.error?.message || "Groq request failed");
   }
 
-  return data.choices?.[0]?.message?.content || "";
+  const choice = data.choices?.[0];
+
+  if (choice?.message?.tool_calls?.length) {
+    throw new Error("Groq attempted a tool call. No tools are enabled in Nova.");
+  }
+
+  return choice?.message?.content || "";
 }
 
 /* FREE SEARCH */
